@@ -1,0 +1,11 @@
+source 'https://github.com/CocoaPods/Specs.git'
+
+target 'BABAudioPlayer', :exclusive => true do
+  pod "BABAudioPlayer", :path => "../"
+end
+
+target 'Tests', :exclusive => true do
+  pod "BABAudioPlayer", :path => "../"
+
+  
+end
