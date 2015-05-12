@@ -1,0 +1,14 @@
+PODS:
+  - BABAudioPlayer (0.1.0)
+
+DEPENDENCIES:
+  - BABAudioPlayer (from `../`)
+
+EXTERNAL SOURCES:
+  BABAudioPlayer:
+    :path: ../
+
+SPEC CHECKSUMS:
+  BABAudioPlayer: 1a959aea4f6d15e68dcfa5bb12fe536adb6e376b
+
+COCOAPODS: 0.35.0
