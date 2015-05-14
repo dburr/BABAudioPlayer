@@ -216,7 +216,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playbackDidPlayToEndTime:) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
         [self.player.currentItem addObserver:self forKeyPath:NSStringFromSelector(@selector(status)) options:(NSKeyValueObservingOptionNew | NSKeyValueObservingOptionInitial) context:NULL];
         [self.player.currentItem addObserver:self forKeyPath:NSStringFromSelector(@selector(loadedTimeRanges)) options:NSKeyValueObservingOptionNew context:NULL];
-
+        
         [self.player addObserver:self forKeyPath:NSStringFromSelector(@selector(rate)) options:NSKeyValueObservingOptionNew context:NULL];
         
         _currentAudioItem = audioItem;
@@ -228,7 +228,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
         [[AVAudioSession sharedInstance] setActive:YES error:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(audioRouteChanged:) name:AVAudioSessionRouteChangeNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(audioInterruption:) name:AVAudioSessionInterruptionNotification object:nil];
-
+        
     });
     
 }
@@ -299,7 +299,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     
     if(self.allowsMultitaskerControls) {
-     
+        
         [[UIApplication sharedApplication] endReceivingRemoteControlEvents];
     }
 }
@@ -442,7 +442,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
             if(artwork) {
                 
                 NSData *data = nil;
-
+                
                 if([artwork.value isKindOfClass:[NSData class]]) {
                     
                     data = (NSData *)artwork.value;
@@ -460,11 +460,14 @@ static BABAudioPlayer  *sharedPlayer = nil;
             
             dispatch_async(dispatch_get_main_queue(), ^{
                 
-                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nowPlayingInfo;
-                
-                if([weakSelf.delegate respondsToSelector:@selector(audioPlayer:didLoadMetadata:forAudioItem:)]) {
+                if([self.currentAudioItem isEqual:audioItem]) {
                     
-                    [weakSelf.delegate audioPlayer:weakSelf didLoadMetadata:nowPlayingInfo forAudioItem:audioItem];
+                    [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nowPlayingInfo;
+                    
+                    if([weakSelf.delegate respondsToSelector:@selector(audioPlayer:didLoadMetadata:forAudioItem:)]) {
+                        
+                        [weakSelf.delegate audioPlayer:weakSelf didLoadMetadata:nowPlayingInfo forAudioItem:audioItem];
+                    }
                 }
             });
         });
