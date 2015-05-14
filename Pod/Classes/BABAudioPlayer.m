@@ -193,6 +193,10 @@ static BABAudioPlayer  *sharedPlayer = nil;
 - (void)playbackDidPlayToEndTime:(NSNotification *)notification {
     
     [self stop];
+    
+    if([self.delegate respondsToSelector:@selector(audioPlayer:didFinishPlayingAudioItem:)]) {
+        [self.delegate audioPlayer:self didFinishPlayingAudioItem:self.currentAudioItem];
+    }
 }
 
 #pragma - Actions
@@ -202,7 +206,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     
     if(self.player) {
-        [self stop];
+        [self clearCurrentMediaItem];
     }
     
     dispatch_async(_playbackQueue, ^{
@@ -269,6 +273,16 @@ static BABAudioPlayer  *sharedPlayer = nil;
     
     
 }
+
+- (void)stop {
+    
+    self.state = BABAudioPlayerStateStopped;
+    [self stopTimeObserver];
+    
+    self.player.rate = 0.0f;
+    [self.player seekToTime:CMTimeMakeWithSeconds(0, NSEC_PER_SEC)];
+}
+
 - (void)togglePlaying {
     
     if (self.state == BABAudioPlayerStatePlaying)
@@ -278,9 +292,9 @@ static BABAudioPlayer  *sharedPlayer = nil;
         [self play];
     }
 }
-- (void)stop {
+- (void)clearCurrentMediaItem {
     
-    self.state = BABAudioPlayerStateStopped;
+    self.state = BABAudioPlayerStateIdle;
     
     [self.player.currentItem removeObserver:self forKeyPath:NSStringFromSelector(@selector(status))];
     [self.player.currentItem removeObserver:self forKeyPath:NSStringFromSelector(@selector(loadedTimeRanges))];
@@ -291,9 +305,6 @@ static BABAudioPlayer  *sharedPlayer = nil;
     self.player = nil;
     self.playbackObserver = nil;
     
-    if([self.delegate respondsToSelector:@selector(audioPlayer:didFinishPlayingAudioItem:)])
-        [self.delegate audioPlayer:self didFinishPlayingAudioItem:self.currentAudioItem];
-    
     self.currentAudioItem = nil;
     
     [[NSNotificationCenter defaultCenter] removeObserver:self];
@@ -303,6 +314,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
         [[UIApplication sharedApplication] endReceivingRemoteControlEvents];
     }
 }
+
 - (void)pause {
     
     [self.player pause];
