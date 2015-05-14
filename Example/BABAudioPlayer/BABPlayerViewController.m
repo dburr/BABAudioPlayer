@@ -39,6 +39,7 @@
         
         _audioPlayer = [[BABAudioPlayer alloc] init];
         _audioPlayer.delegate = self;
+        
     }
     return self;
 }
@@ -54,7 +55,6 @@
 
 - (void)loadAudioItem:(BABAudioItem *)audioItem {
     
-    self.audioPlayer.allowsBackgroundAudio = YES;
     [self.audioPlayer queueItem:audioItem];
 }
 
@@ -123,12 +123,13 @@
 
 - (void)audioPlayer:(BABAudioPlayer *)player didChangeElapsedTime:(NSTimeInterval)elapsedTime percentage:(float)percentage {
     
+    self.sliderView.value = percentage;
+    
     NSString *elapsedTimeString = BABFormattedTimeStringFromTimeInterval(elapsedTime);
     NSString *durationString = BABFormattedTimeStringFromTimeInterval(player.duration);
     
     self.timeElapsedLabel.text = [NSString stringWithFormat:@"%@/%@", elapsedTimeString, durationString];
     
-    self.sliderView.value = percentage;
 }
 
 - (void)audioPlayer:(BABAudioPlayer *)player didLoadMetadata:(NSDictionary *)metadata forAudioItem:(BABAudioItem *)audioItem {
@@ -140,6 +141,11 @@
     MPMediaItemArtwork *artwork = metadata[MPMediaItemPropertyArtwork];
     self.artworkImageView.image = [artwork imageWithSize:self.artworkImageView.frame.size];
     
+}
+
+- (void)remoteControlReceivedWithEvent:(UIEvent *)event {
+    
+    [self.audioPlayer remoteControlReceivedWithEvent:event];
 }
 
 

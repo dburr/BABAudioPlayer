@@ -24,7 +24,10 @@
 
 - (IBAction)remoteFileButtonPressed:(UIButton *)sender {
     
-    NSURL *URL = [NSURL URLWithString:@"http://brynbodayle.com/Files/18%20Down%20To%20The%20Sound.mp3"];
+    //http://brynbodayle.com/Files/COOL%20DJ%20MIX.mp3
+    //http://brynbodayle.com/Files/18%20Down%20To%20The%20Sound.mp3
+    
+    NSURL *URL = [NSURL URLWithString:@"http://brynbodayle.com/Files/COOL%20DJ%20MIX.mp3"];
     BABAudioItem *remoteFileAudioItem = [BABAudioItem audioItemWithURL:URL];
     
     BABPlayerViewController *playerViewController = [self.storyboard instantiateViewControllerWithIdentifier:NSStringFromClass([BABPlayerViewController class])];

@@ -25,6 +25,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
 @property (nonatomic, strong) dispatch_queue_t playbackQueue;
 @property (nonatomic, assign) BOOL newMediaItem;
 @property (nonatomic, readwrite) BABAudioItem *currentAudioItem;
+@property (nonatomic, assign) BOOL shouldResumePlayback;
 
 @property (nonatomic, readwrite) BABAudioPlayerState state;
 
@@ -70,12 +71,28 @@ static BABAudioPlayer  *sharedPlayer = nil;
         self.audioPlaybackInterruptionBehaviour = BBAudioPlaybackInterruptionBehaviourShouldWait;
         
         _playbackQueue = dispatch_queue_create("com.BABAudioPlayer.playbackqueue", NULL);
-        
     }
     return self;
 }
 
 #pragma - State
+
+- (void)didEnterBackground:(NSNotification *)notification {
+    
+    if(self.state == BABAudioPlayerStatePlaying) {
+        
+        self.shouldResumePlayback = YES;
+        self.state = BABAudioPlayerStatePaused;
+    }
+}
+
+- (void)willEnterForeground:(NSNotification *)notification {
+    
+    if(self.shouldResumePlayback) {
+        
+        self.state = BABAudioPlayerStatePlaying;
+    }
+}
 
 - (void)setState:(BABAudioPlayerState)state {
     
@@ -130,14 +147,14 @@ static BABAudioPlayer  *sharedPlayer = nil;
     switch (reason) {
         case AVAudioSessionRouteChangeReasonNewDeviceAvailable: {
             
-            switch ([BABAudioPlayer sharedInstance].audioRouteAddedBehaviour) {
+            switch (self.audioRouteAddedBehaviour) {
                 case BBAudioRouteChangedBehaviourContinuePlayback:
                     break;
                 case BBAudioRouteChangedBehaviourPausePlayback:
-                    [[BABAudioPlayer sharedInstance] pause];
+                    [self pause];
                     break;
                 case BBAudioRouteChangedBehaviourStopPlayback:
-                    [[BABAudioPlayer sharedInstance] stop];
+                    [self stop];
                     break;
                 default:
                     break;
@@ -146,14 +163,14 @@ static BABAudioPlayer  *sharedPlayer = nil;
             break;
         case AVAudioSessionRouteChangeReasonOldDeviceUnavailable: {
             
-            switch ([BABAudioPlayer sharedInstance].audioRouteRemovedBehaviour) {
+            switch (self.audioRouteRemovedBehaviour) {
                 case BBAudioRouteChangedBehaviourContinuePlayback:
                     break;
                 case BBAudioRouteChangedBehaviourPausePlayback:
-                    [[BABAudioPlayer sharedInstance] pause];
+                    [self pause];
                     break;
                 case BBAudioRouteChangedBehaviourStopPlayback:
-                    [[BABAudioPlayer sharedInstance] stop];
+                    [self stop];
                     break;
                 default:
                     break;
@@ -170,7 +187,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
     AVAudioSessionInterruptionType interruptionType = [notification.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
     AVAudioSessionInterruptionOptions interruptionOptions = [notification.userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
     
-    NSLog(@"hey");
+    [self pause];
 }
 
 - (void)playbackDidPlayToEndTime:(NSNotification *)notification {
@@ -194,8 +211,12 @@ static BABAudioPlayer  *sharedPlayer = nil;
         self.player = [[AVPlayer alloc] initWithPlayerItem:item];
         self.newMediaItem = YES;
         
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(didEnterBackground:) name:UIApplicationDidEnterBackgroundNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(willEnterForeground:) name:UIApplicationWillEnterForegroundNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playbackDidPlayToEndTime:) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
         [self.player.currentItem addObserver:self forKeyPath:NSStringFromSelector(@selector(status)) options:(NSKeyValueObservingOptionNew | NSKeyValueObservingOptionInitial) context:NULL];
+        [self.player.currentItem addObserver:self forKeyPath:NSStringFromSelector(@selector(loadedTimeRanges)) options:NSKeyValueObservingOptionNew context:NULL];
+
         [self.player addObserver:self forKeyPath:NSStringFromSelector(@selector(rate)) options:NSKeyValueObservingOptionNew context:NULL];
         
         _currentAudioItem = audioItem;
@@ -262,6 +283,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
     self.state = BABAudioPlayerStateStopped;
     
     [self.player.currentItem removeObserver:self forKeyPath:NSStringFromSelector(@selector(status))];
+    [self.player.currentItem removeObserver:self forKeyPath:NSStringFromSelector(@selector(loadedTimeRanges))];
     [self.player removeObserver:self forKeyPath:NSStringFromSelector(@selector(rate))];
     [self.player removeTimeObserver:self.playbackObserver];
     self.player.rate = 0;
@@ -274,10 +296,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
     
     self.currentAudioItem = nil;
     
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:AVAudioSessionRouteChangeNotification object:nil];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:AVAudioSessionInterruptionNotification object:nil];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
-    
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     
     if(self.allowsMultitaskerControls) {
      
@@ -326,23 +345,26 @@ static BABAudioPlayer  *sharedPlayer = nil;
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
     
-    if(self.state != BABAudioPlayerStateScrubbing && [keyPath isEqualToString:NSStringFromSelector(@selector(rate))]) {
+    if([keyPath isEqualToString:NSStringFromSelector(@selector(rate))]) {
         
-        [[NSOperationQueue mainQueue] addOperationWithBlock:^{
+        if(self.state != BABAudioPlayerStateScrubbing) {
             
-            if(self.player.currentItem.status == AVPlayerItemStatusReadyToPlay) {
+            [[NSOperationQueue mainQueue] addOperationWithBlock:^{
                 
-                float newRate = [change[NSKeyValueChangeNewKey] floatValue];
-                float oldRate = [change[NSKeyValueChangeOldKey] floatValue];
-                
-                if(newRate == 1 && newRate != oldRate) {
-                    self.state = BABAudioPlayerStatePlaying;
+                if(self.player.currentItem.status == AVPlayerItemStatusReadyToPlay) {
+                    
+                    float newRate = [change[NSKeyValueChangeNewKey] floatValue];
+                    float oldRate = [change[NSKeyValueChangeOldKey] floatValue];
+                    
+                    if(newRate == 1 && newRate != oldRate) {
+                        self.state = BABAudioPlayerStatePlaying;
+                    }
+                    else {
+                        self.state = BABAudioPlayerStatePaused;
+                    }
                 }
-                else {
-                    self.state = BABAudioPlayerStatePaused;
-                }
-            }
-        }];
+            }];
+        }
     }
     else if([keyPath isEqualToString:NSStringFromSelector(@selector(status))]) {
         
@@ -355,7 +377,15 @@ static BABAudioPlayer  *sharedPlayer = nil;
                     break;
                 case AVPlayerItemStatusReadyToPlay: {
                     
-                    self.state = BABAudioPlayerStateWaiting;
+                    if(self.player.rate == 1.0) {
+                        
+                        self.state = BABAudioPlayerStatePlaying;
+                    }
+                    else if(!self.shouldResumePlayback) {
+                        
+                        self.state = BABAudioPlayerStateWaiting;
+                    }
+                    
                 }
                     break;
                 case AVPlayerItemStatusFailed: {
@@ -478,7 +508,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
     
     __block BABAudioPlayer *blockSelf = self;
     
-    self.playbackObserver = [self.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(1, 1)  queue:NULL usingBlock:^(CMTime time){
+    self.playbackObserver = [self.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(0.01, NSEC_PER_SEC)  queue:NULL usingBlock:^(CMTime time){
         
         [blockSelf timeElapsedChanged];
     }];
@@ -492,9 +522,15 @@ static BABAudioPlayer  *sharedPlayer = nil;
 
 - (void)timeElapsedChanged {
     
-    NSTimeInterval timeElapsed = CMTimeGetSeconds(self.player.currentTime);
+    NSTimeInterval timeElapsed = MAX(0, CMTimeGetSeconds(self.player.currentTime));
     
-    float percentage = timeElapsed/self.duration;
+    float percentage = 0;
+    
+    CMTime endTime = CMTimeConvertScale(self.player.currentItem.asset.duration, self.player.currentTime.timescale, kCMTimeRoundingMethod_RoundHalfAwayFromZero);
+    if (CMTimeCompare(endTime, kCMTimeZero) != 0) {
+        double normalizedTime = (double)self.player.currentTime.value/(double)endTime.value;
+        percentage = normalizedTime;
+    }
     
     if([self.delegate respondsToSelector:@selector(audioPlayer:didChangeElapsedTime:percentage:)]) {
         [self.delegate audioPlayer:self didChangeElapsedTime:timeElapsed percentage:percentage];
@@ -563,7 +599,30 @@ static BABAudioPlayer  *sharedPlayer = nil;
         
         double time = duration * (value - minValue) / (maxValue - minValue);
         
-        [self.player seekToTime:CMTimeMakeWithSeconds(time, NSEC_PER_SEC)];
+        CMTime seekTime = CMTimeMakeWithSeconds(time, NSEC_PER_SEC);
+        [self.player seekToTime:seekTime];
+        
+        NSArray *loadedRanges = self.player.currentItem.loadedTimeRanges;
+        
+        BOOL loaded = NO;
+        
+        for(NSValue *loadedRange in loadedRanges) {
+            
+            CMTimeRange timeRange;
+            [loadedRange getValue:&timeRange];
+            
+            if(CMTimeRangeContainsTime(timeRange, seekTime)) {
+                
+                loaded = YES;
+                break;
+            }
+        }
+        
+        if(!loaded) {
+            
+            self.state = BABAudioPlayerStateBuffering;
+        }
+        
     }
 }
 
@@ -583,7 +642,11 @@ static BABAudioPlayer  *sharedPlayer = nil;
         }
     }
     self.player.rate = previousPlaybackRate;
-    self.state = self.player.rate == 1.0f ? BABAudioPlayerStatePlaying : BABAudioPlayerStatePaused;
+    
+    if(self.state != BABAudioPlayerStateBuffering) {
+        
+        self.state = self.player.rate == 1.0f ? BABAudioPlayerStatePlaying : BABAudioPlayerStatePaused;
+    }
 }
 
 
