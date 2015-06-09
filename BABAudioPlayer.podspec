@@ -19,7 +19,7 @@ Pod::Spec.new do |s|
   s.license          = 'MIT'
   s.author           = { "Bryn Bodayle" => "bryn.bodayle@gmail.com" }
   s.source           = { :git => "https://github.com/brynbodayle/BABAudioPlayer.git", :tag => s.version.to_s }
-  # s.social_media_url = 'https://twitter.com/brynbodayle
+  # s.social_media_url = 'https://twitter.com/brynbodayle'
 
   s.platform     = :ios, '7.0'
   s.requires_arc = true
