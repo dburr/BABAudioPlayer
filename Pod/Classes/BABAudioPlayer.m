@@ -54,7 +54,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
 
 - (void)dealloc {
     
-    [self stop];
+    [self clearCurrentMediaItem];
 }
 
 - (id)init {
@@ -184,8 +184,8 @@ static BABAudioPlayer  *sharedPlayer = nil;
 
 - (void)audioInterruption:(NSNotification *)notification {
     
-    AVAudioSessionInterruptionType interruptionType = [notification.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
-    AVAudioSessionInterruptionOptions interruptionOptions = [notification.userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
+    //AVAudioSessionInterruptionType interruptionType = [notification.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
+    //AVAudioSessionInterruptionOptions interruptionOptions = [notification.userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
     
     [self pause];
 }
@@ -209,29 +209,31 @@ static BABAudioPlayer  *sharedPlayer = nil;
         [self clearCurrentMediaItem];
     }
     
-    dispatch_async(_playbackQueue, ^{
+    __weak typeof(self)weakSelf = self;
+    
+    dispatch_async(self.playbackQueue, ^{
         
         AVPlayerItem *item = [[AVPlayerItem alloc] initWithURL:audioItem.url];
-        self.player = [[AVPlayer alloc] initWithPlayerItem:item];
-        self.newMediaItem = YES;
+        weakSelf.player = [[AVPlayer alloc] initWithPlayerItem:item];
+        weakSelf.newMediaItem = YES;
         
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(didEnterBackground:) name:UIApplicationDidEnterBackgroundNotification object:nil];
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(willEnterForeground:) name:UIApplicationWillEnterForegroundNotification object:nil];
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(playbackDidPlayToEndTime:) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
-        [self.player.currentItem addObserver:self forKeyPath:NSStringFromSelector(@selector(status)) options:(NSKeyValueObservingOptionNew | NSKeyValueObservingOptionInitial) context:NULL];
-        [self.player.currentItem addObserver:self forKeyPath:NSStringFromSelector(@selector(loadedTimeRanges)) options:NSKeyValueObservingOptionNew context:NULL];
+        [[NSNotificationCenter defaultCenter] addObserver:weakSelf selector:@selector(didEnterBackground:) name:UIApplicationDidEnterBackgroundNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:weakSelf selector:@selector(willEnterForeground:) name:UIApplicationWillEnterForegroundNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:weakSelf selector:@selector(playbackDidPlayToEndTime:) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
+        [weakSelf.player.currentItem addObserver:weakSelf forKeyPath:NSStringFromSelector(@selector(status)) options:(NSKeyValueObservingOptionNew | NSKeyValueObservingOptionInitial) context:NULL];
+        [weakSelf.player.currentItem addObserver:weakSelf forKeyPath:NSStringFromSelector(@selector(loadedTimeRanges)) options:NSKeyValueObservingOptionNew context:NULL];
         
-        [self.player addObserver:self forKeyPath:NSStringFromSelector(@selector(rate)) options:NSKeyValueObservingOptionNew context:NULL];
+        [weakSelf.player addObserver:weakSelf forKeyPath:NSStringFromSelector(@selector(rate)) options:NSKeyValueObservingOptionNew context:NULL];
         
-        _currentAudioItem = audioItem;
+        weakSelf.currentAudioItem = audioItem;
         
-        if(self.showsNowPlayingMetadata){
-            [self updateNowPlayingMetadata:audioItem];
+        if(weakSelf.showsNowPlayingMetadata){
+            [weakSelf updateNowPlayingMetadata:audioItem];
         }
         
         [[AVAudioSession sharedInstance] setActive:YES error:nil];
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(audioRouteChanged:) name:AVAudioSessionRouteChangeNotification object:nil];
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(audioInterruption:) name:AVAudioSessionInterruptionNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:weakSelf selector:@selector(audioRouteChanged:) name:AVAudioSessionRouteChangeNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:weakSelf selector:@selector(audioInterruption:) name:AVAudioSessionInterruptionNotification object:nil];
         
     });
     
@@ -249,21 +251,23 @@ static BABAudioPlayer  *sharedPlayer = nil;
 
 - (void)play {
     
-    dispatch_async(_playbackQueue, ^{
+    __weak typeof(self)weakSelf = self;
+    
+    dispatch_async(self.playbackQueue, ^{
         
-        [self.player play];
+        [weakSelf.player play];
         
         dispatch_sync(dispatch_get_main_queue(), ^{
             
-            if(!self.playbackObserver)
-                [self startTimeObserver];
+            if(!weakSelf.playbackObserver)
+                [weakSelf startTimeObserver];
             
-            if(self.allowsBackgroundAudio) {
+            if(weakSelf.allowsBackgroundAudio) {
                 
                 [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
             }
             
-            if(self.allowsMultitaskerControls)
+            if(weakSelf.allowsMultitaskerControls)
                 [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
             
         });
@@ -285,8 +289,10 @@ static BABAudioPlayer  *sharedPlayer = nil;
 
 - (void)togglePlaying {
     
-    if (self.state == BABAudioPlayerStatePlaying)
+    if (self.state == BABAudioPlayerStatePlaying) {
+        
         [self pause];
+    }
     else if(self.state == BABAudioPlayerStateWaiting || self.state == BABAudioPlayerStatePaused) {
         
         [self play];
@@ -371,7 +377,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
                     if(newRate == 1 && newRate != oldRate) {
                         self.state = BABAudioPlayerStatePlaying;
                     }
-                    else {
+                    else if(self.state != BABAudioPlayerStateStopped && !self.shouldResumePlayback) {
                         self.state = BABAudioPlayerStatePaused;
                     }
                 }
@@ -391,7 +397,16 @@ static BABAudioPlayer  *sharedPlayer = nil;
                     
                     if(self.player.rate == 1.0) {
                         
-                        self.state = BABAudioPlayerStatePlaying;
+                        BOOL loaded = [self isTimeLoaded:self.player.currentTime];
+                        
+                        if(loaded) {
+                            
+                            self.state = BABAudioPlayerStatePlaying;
+                        }
+                        else {
+                            
+                            self.state = BABAudioPlayerStateBuffering;
+                        }
                     }
                     else if(!self.shouldResumePlayback) {
                         
@@ -416,6 +431,20 @@ static BABAudioPlayer  *sharedPlayer = nil;
             }
         }];
     }
+    else if([keyPath isEqualToString:NSStringFromSelector(@selector(loadedTimeRanges))]) {
+        
+        [[NSOperationQueue mainQueue] addOperationWithBlock:^{
+            
+            BOOL loaded = [self isTimeLoaded:self.player.currentTime];
+            
+            if(loaded && self.state == BABAudioPlayerStateBuffering && self.player.rate == 1.0f) {
+                
+                self.state = BABAudioPlayerStatePlaying;
+            }
+            
+        }];
+    }
+    
 }
 
 #pragma - Metadata
@@ -455,9 +484,21 @@ static BABAudioPlayer  *sharedPlayer = nil;
                 
                 NSData *data = nil;
                 
-                if([artwork.value isKindOfClass:[NSData class]]) {
+                if([artwork.keySpace isEqualToString:AVMetadataKeySpaceiTunes]) {
                     
-                    data = (NSData *)artwork.value;
+                    data = [artwork.value copyWithZone:nil];
+                }
+                else if([artwork.keySpace isEqualToString:AVMetadataKeySpaceID3]) {
+                    
+                    if([artwork.value isKindOfClass:[NSData class]]) {
+                        
+                        data = (NSData *)artwork.value;
+                    }
+                    else { //typically the case in iOS 7
+                        
+                        NSDictionary *artworkDictionary = (NSDictionary *)artwork.value;
+                        data = artworkDictionary[@"data"];
+                    }
                 }
                 
                 if(data) {
@@ -472,7 +513,7 @@ static BABAudioPlayer  *sharedPlayer = nil;
             
             dispatch_async(dispatch_get_main_queue(), ^{
                 
-                if([self.currentAudioItem isEqual:audioItem]) {
+                if([weakSelf.currentAudioItem isEqual:audioItem]) {
                     
                     [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nowPlayingInfo;
                     
@@ -521,11 +562,11 @@ static BABAudioPlayer  *sharedPlayer = nil;
 
 - (void)startTimeObserver {
     
-    __block BABAudioPlayer *blockSelf = self;
+    __weak typeof(self)weakSelf = self;
     
     self.playbackObserver = [self.player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(0.01, NSEC_PER_SEC)  queue:NULL usingBlock:^(CMTime time){
         
-        [blockSelf timeElapsedChanged];
+        [weakSelf timeElapsedChanged];
     }];
 }
 
@@ -617,21 +658,8 @@ static BABAudioPlayer  *sharedPlayer = nil;
         CMTime seekTime = CMTimeMakeWithSeconds(time, NSEC_PER_SEC);
         [self.player seekToTime:seekTime];
         
-        NSArray *loadedRanges = self.player.currentItem.loadedTimeRanges;
+        BOOL loaded = [self isTimeLoaded:seekTime];
         
-        BOOL loaded = NO;
-        
-        for(NSValue *loadedRange in loadedRanges) {
-            
-            CMTimeRange timeRange;
-            [loadedRange getValue:&timeRange];
-            
-            if(CMTimeRangeContainsTime(timeRange, seekTime)) {
-                
-                loaded = YES;
-                break;
-            }
-        }
         
         if(!loaded) {
             
@@ -641,10 +669,32 @@ static BABAudioPlayer  *sharedPlayer = nil;
     }
 }
 
+- (BOOL)isTimeLoaded:(CMTime)time {
+    
+    NSArray *loadedRanges = self.player.currentItem.loadedTimeRanges;
+    
+    BOOL loaded = NO;
+    
+    for(NSValue *loadedRange in loadedRanges) {
+        
+        CMTimeRange timeRange;
+        [loadedRange getValue:&timeRange];
+        
+        if(CMTimeRangeContainsTime(timeRange, time)) {
+            
+            loaded = YES;
+            break;
+        }
+    }
+    
+    return loaded;
+}
+
 - (void)endScrubbing:(id <BABCurrentTimeScrubber>)scrubber {
     
+    CMTime playerDuration = self.player.currentItem.duration;
+    
     if (!self.playbackObserver) {
-        CMTime playerDuration = self.player.currentItem.duration;
         
         if (CMTIME_IS_INVALID(playerDuration)) {
             return;
@@ -658,7 +708,17 @@ static BABAudioPlayer  *sharedPlayer = nil;
     }
     self.player.rate = previousPlaybackRate;
     
-    if(self.state != BABAudioPlayerStateBuffering) {
+    
+    if((int)CMTimeGetSeconds(playerDuration) == (int)CMTimeGetSeconds(self.player.currentTime)) {
+        
+        [self stop];
+        
+        if([self.delegate respondsToSelector:@selector(audioPlayer:didFinishPlayingAudioItem:)]) {
+            
+            [self.delegate audioPlayer:self didFinishPlayingAudioItem:self.currentAudioItem];
+        }
+    }
+    else if(self.state != BABAudioPlayerStateBuffering) {
         
         self.state = self.player.rate == 1.0f ? BABAudioPlayerStatePlaying : BABAudioPlayerStatePaused;
     }
