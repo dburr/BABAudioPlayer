@@ -10,19 +10,16 @@
 Pod::Spec.new do |s|
   s.name             = "BABAudioPlayer"
   s.version          = "0.1.0"
-  s.summary          = "A short description of BABAudioPlayer."
+  s.summary          = "A convenience layer ontop of AVAplyer for iOS."
   s.description      = <<-DESC
-                       An optional longer description of BABAudioPlayer
-
-                       * Markdown format.
-                       * Don't worry about the indent, we strip it!
+                       A convenience layer ontop of AVAplyer for iOS that allows for easier audio playback.
                        DESC
-  s.homepage         = "https://github.com/<GITHUB_USERNAME>/BABAudioPlayer"
+  s.homepage         = "https://github.com/brynbodayle/BABAudioPlayer"
   # s.screenshots     = "www.example.com/screenshots_1", "www.example.com/screenshots_2"
   s.license          = 'MIT'
   s.author           = { "Bryn Bodayle" => "bryn.bodayle@gmail.com" }
-  s.source           = { :git => "https://github.com/<GITHUB_USERNAME>/BABAudioPlayer.git", :tag => s.version.to_s }
-  # s.social_media_url = 'https://twitter.com/<TWITTER_USERNAME>'
+  s.source           = { :git => "https://github.com/brynbodayle/BABAudioPlayer.git", :tag => s.version.to_s }
+  # s.social_media_url = 'https://twitter.com/brynbodayle
 
   s.platform     = :ios, '7.0'
   s.requires_arc = true
