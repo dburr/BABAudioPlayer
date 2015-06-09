@@ -128,9 +128,9 @@ static BABAudioPlayer  *sharedPlayer = nil;
 - (void)setAllowsBackgroundAudio:(BOOL)allowsBackgroundAudio {
     
     if(allowsBackgroundAudio){
-        
+                
         NSDictionary *plistDict = [[NSBundle mainBundle] infoDictionary];
-        NSArray *backgroundModes = plistDict[@"UIBackgroundModes"];
+        NSArray * backgroundModes __unused = plistDict[@"UIBackgroundModes"];
         
         NSAssert([backgroundModes containsObject:@"audio"], @"The required background mode for audio should be included in your Info.plist");
     }
