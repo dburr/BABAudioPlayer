@@ -15,11 +15,10 @@ Pod::Spec.new do |s|
                        A convenience layer ontop of AVAplyer for iOS that allows for easier audio playback.
                        DESC
   s.homepage         = "https://github.com/brynbodayle/BABAudioPlayer"
-  # s.screenshots     = "www.example.com/screenshots_1", "www.example.com/screenshots_2"
   s.license          = 'MIT'
   s.author           = { "Bryn Bodayle" => "bryn.bodayle@gmail.com" }
   s.source           = { :git => "https://github.com/brynbodayle/BABAudioPlayer.git", :tag => s.version.to_s }
-  # s.social_media_url = 'https://twitter.com/brynbodayle'
+  s.social_media_url = 'https://twitter.com/brynbodayle'
 
   s.platform     = :ios, '7.0'
   s.requires_arc = true
@@ -28,8 +27,4 @@ Pod::Spec.new do |s|
   s.resource_bundles = {
     'BABAudioPlayer' => ['Pod/Assets/*.png']
   }
-
-  # s.public_header_files = 'Pod/Classes/**/*.h'
-  # s.frameworks = 'UIKit', 'MapKit'
-  # s.dependency 'AFNetworking', '~> 2.3'
 end
