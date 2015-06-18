@@ -35,15 +35,6 @@ static BABAudioPlayer  *sharedPlayer = nil;
 
 + (instancetype)sharedPlayer {
     
-    return sharedPlayer;
-}
-+ (void)setSharedPlayer:(BABAudioPlayer *)player {
-    
-    sharedPlayer = player;
-}
-
-+ (BABAudioPlayer *)sharedInstance {
-    
     static dispatch_once_t pred = 0;
     __strong static id _sharedObject = nil;
     dispatch_once(&pred, ^{

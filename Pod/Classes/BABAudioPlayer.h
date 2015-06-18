@@ -59,7 +59,6 @@ typedef NS_ENUM(NSUInteger, BABAudioPlayerState) {
 @property (nonatomic, weak) id <BABAudioPlayerDelegate> delegate;
 
 + (instancetype)sharedPlayer;
-+ (void)setSharedPlayer:(BABAudioPlayer *)player;
 
 - (void)queueItem:(BABAudioItem *)audioItem;
 - (void)queueItems:(NSArray *)audioItems;
